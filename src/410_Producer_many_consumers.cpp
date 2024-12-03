@@ -23,23 +23,29 @@ bool bDone = false;		//used by producer to indicate its done and gone
 int gCount = 0;
 
 void producer(int numbcounts) {
+	{
+		unique_lock<mutex> lck(m);
+		bReady = true;		//indicate we are open for business
+		cv.notify_all();
+	}
+
 	for (int j = 0; j < numbcounts; j++) {
 		unique_lock<mutex> lck(m);
 
 		//produce something
 		gCount++;
 		cout << "Producer gCount=" << gCount << endl;
-
-		bReady = true;		//indicate we are open for business
-
-		cv.notify_all();	//tell consumer to consume
+		lck.unlock();
+		cv.notify_one();	//tell consumer to consume
 	}
 
 	//one last lock to tell everyone we are done
-	unique_lock<mutex> lck(m);
-	bDone = true;
-	cout << "Producer DONE!!" << endl;
-
+	{
+		unique_lock<mutex> lck(m);
+		bDone = true;
+		cout << "Producer DONE!!" << endl;
+	}
+	cv.notify_all();
 }
 
 void consumer(int id) {
@@ -71,18 +77,17 @@ void consumer(int id) {
 		//consume something
 		if (gCount > 0) {
 			gCount--;
-			cout << "               Consumer:" << id << " gCount=" << gCount
-					<< endl;
+			cout << "               Consumer:" << id << " gCount=" << gCount<< endl;
 		} else
 			cout << "               Consumer:" << id << " gCount=" << gCount
-					<< "noticed that bDone is true!" << endl;
+					<< ", noticed that bDone is true!" << endl;
 	}
 }
 
 int main() {
 	cout << "The initial value of gCount is " << gCount << endl; //
 
-	thread t_producer(producer, 10);
+	thread t_producer(producer, 1000);
 	thread t_consumer1(consumer, 1);
 	thread t_consumer2(consumer, 2);
 	thread t_consumer3(consumer, 3);
